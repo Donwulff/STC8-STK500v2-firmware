@@ -1,6 +1,6 @@
 /*
  * Board pin map — STK600-clone 4-in-1 HVPP programmer, STC8H8K64U LQFP32.
- * Single source of truth; traced 2026-07-02 (PLAN.md "Trace results").
+ * Single source of truth; traced on real hardware 2026-07-02.
  *
  * DATA0..7 = P2.0..P2.7 (byte-aligned: P2 = data bus, one operation).
  * UART2 header: P1.0 = RxD2, P1.1 = TxD2 (peripheral-fixed).

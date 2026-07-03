@@ -1,19 +1,32 @@
 # STK600-clone replacement firmware (STC8H8K64U)
 
-Replacement firmware for the commercial 4-in-1 AVR high-voltage programmer,
-speaking STK500v2 (`avrdude -c stk500pp`) with a part-agnostic HVPP engine.
-The core fix over the stock firmware: **it honors host-uploaded control stacks
-(`CMD_SET_CONTROL_STACK`)**, which the stock firmware ignores — that alone is
-what makes multiplexed 20-pin parts work at all.
+Replacement firmware for the commercial 4-in-1 AVR high-voltage programmer.
+With the firmware my unit shipped with, **HVPP did not work on 20-pin parts
+like the ATtiny461** — every 20-pin AVR multiplexes some programming lines,
+the host describes that multiplexing in a control stack it uploads, and the
+stock firmware throws the stack away. This firmware plays it faithfully.
+(Why the bug hides on 28/40-pin parts, and the rest of the story:
+[doc/background.md](doc/background.md).)
 
-On top of that it can auto-remap the tinyX61 crossed stack so an x61 wires
-**label-to-label**, the same convention as an ordinary 20-pin part. That's a
-convenience, not the headline — and it's optional: the native x61 *crossed*
-wiring (what the official Dragon layout and any expansion cards built for this
-connector assume) stays fully supported as a selectable mode. So you can wire
-either way; the firmware plays the stack to match. (The HVPP engine is
-part-agnostic by design; so far only x61 is bench-validated on real hardware —
-standard-part validation is milestone 4.)
+Features:
+
+- **Part-agnostic HVPP** — signal choreography comes from the host-uploaded
+  control stack (`CMD_SET_CONTROL_STACK`), not a fixed table, so anything
+  avrdude has a `pp_controlstack` for is in scope. Bench-validated on
+  ATtiny461A; a standard 28/40-pin part is the next validation target.
+- **tinyX61 crossed-stack auto-remap** — wire an ATtiny261/461/861
+  **label-to-label** like any ordinary 20-pin part instead of the special
+  crossed layout the official docs require. The native crossed wiring (the
+  Dragon layout, and expansion cards built for it) stays available as a
+  selectable raw mode; the firmware plays the stack to match either wiring.
+- **ISP through the same HVPP socket** — no rewiring
+  (`avrdude -c stk500v2`); flash writes bench-validated.
+- **`@PINDBG!` hardware-forensics console** — clamp-diode decay probing, an
+  ISP matrix self-scan where the socketed chip names its own wires, VCC
+  rail/current monitoring. Board revisions vary; this is how you verify
+  *your* unit's wiring before trusting it.
+- **Native USB CDC-ACM** transport (UART2 fallback), a button-free reflash
+  loop, and a pre-flash simulation gate so you never flash blind.
 
 > ### ⚠️ Reflashing is effectively a ONE-WAY street
 > The STC8H's stock firmware **cannot be read out**, so you cannot make a backup
@@ -32,58 +45,6 @@ standard-part validation is milestone 4.)
 > fitted. The forensics toolkit (below) exists precisely so you can re-verify
 > your own board rather than trust mine.
 
-## Why this exists (and what it will save you)
-
-If you have one of these cheap AliExpress "4-in-1 STK600 clone" HVPP programmers
-and tried to use it on an **ATtiny261/461/861 (tinyX61)** part, you hit a wall.
-Here is the map of that wall, so you don't spend the days we did finding each
-brick:
-
-1. **The stock firmware on the unit I got ignores the host control stack.**
-   avrdude/Studio upload a 32-byte control stack (`CMD_SET_CONTROL_STACK`) that
-   encodes each part's HVPP signal choreography — in particular how 20-pin parts
-   time-share programming functions onto fewer pins (BS2 riding the XA1 line,
-   PAGEL riding the BS1 line, etc.). This firmware appears table-driven and
-   discards the uploaded stack, driving a fixed default scheme instead. Wide,
-   non-multiplexed parts (the 28/40-pin DIPs the ZIF cards are built for) program
-   fine, which is what hides the bug. But our analysis says any operation that
-   needs the *multiplexed* control lines — i.e. essentially any 20-pin part, not
-   just x61 — can't be driven correctly, because the mechanism that would do it
-   (the stack) is never used. On the x61 the reads come back plausible but
-   aliased; BS2-dependent operations are simply wrong.
-2. **The tinyX61 family is the case you can't even hand-wire around.** Standard
-   20-pin parts keep each function on its named line, so a lucky subset of
-   operations survives name-to-name wiring. x61 *re-pairs* functions across the
-   control lines (XA1+BS2 on one target pin, PAGEL+BS1 on another), so under any
-   static wiring **no** control stack but an x61-shaped one can satisfy it — and
-   the stock firmware won't play one. The STK600 manual's generic 20-pin wiring
-   is wrong for x61, and the AVR Dragon docs hand you a per-part wiring diagram
-   without explaining *why*. The one public page that names it is ScratchMonkey's
-   HVPP notes (see **References**); this was the part of the puzzle that took the
-   longest to see.
-3. **No public source or firmware runs on this board as-is.** ScratchMonkey,
-   the reference open HVPP implementation, is AVR-based; nothing off-the-shelf
-   targets the STC8H MCU inside this clone. So the only way to make it honor the
-   stack is to replace the firmware — which is what this repo is.
-
-And the backdrop that makes it worth the effort: **classic high-voltage parallel
-programming has no current first-party tool.** Per Microchip support, *no current
-MPLAB hardware tool supports this programming method*; the only ones that ever
-did — STK600 and AVR Dragon — are discontinued legacy, and modern tools
-(PICkit, Power Debugger, MPLAB SNAP) speak UPDI, not classic HVPP. If you need to
-un-brick a fuse-corrupted classic ATtiny/ATmega, a working clone like this is one
-of the few paths left.
-
-One genuine edge this hardware has: the 12 V that HVPP/HVSP needs is **generated
-on the board itself** (a traced MC34063A boost rail), so there's no external
-supply to wire up. It still gets applied to a specific pin — but to a *fixed,
-tested socket/header position* rather than a flying lead you clip on by hand,
-which removes the "clipped onto the wrong pin" error class of a bare DIY rig.
-(The original STK500, by contrast, wanted an external 12 V fed in for HV
-programming.) The clones' marketing "only solution with integrated HV" is
-overstated — the discontinued AVR Dragon and STK600 had it too — but among
-cheap, currently-buyable tools it's a fair pitch.
-
 > ### ⚠️ Match the part to the socket before you power it
 > The 12 V RESET is applied to whatever pin sits at the RESET position **for the
 > pinout the ZIF/wiring assumes.** Put in a chip of a different pin-count, or
@@ -92,40 +53,15 @@ cheap, currently-buyable tools it's a fair pitch.
 > this (see the planned signature gate below). Confirm the part and its
 > orientation match the socket/wiring, every time, before applying power.
 
-The upside of having been forced to reverse-engineer the whole board: the repo
-ships a **hardware-forensics toolkit** (the `@PINDBG!` console — clamp-diode
-decay probing, an ISP-pin matrix self-scan where the socketed chip names its own
-wires, a VCC-switch hunt). Board revisions vary; that toolkit is what makes
-re-deriving the pin map on a *different* revision a short, confident job instead
-of another multi-day hunt.
-
 ### Scope / status
 
-This is **not yet a complete STK600 replacement.** It implements the specific
-things the stock firmware got wrong or missing — part-agnostic HVPP with x61
-auto-remap, honest control-stack playback, ISP through the same socket, signature
-/ fuse / lock / flash / EEPROM **reads**, a native USB-CDC transport, and a
-button-free reflash loop. Paged flash/EEPROM **writes**, HVSP, and full STK600
-parameter emulation are not done yet (see the stretch list). If you flash this,
-you are trading "closed, table-driven, x61-broken" for "open, stack-honest,
-read-complete but write-incomplete." Know which side of that trade you need.
-
-Plan and hardware trace: `../PLAN.md` (internal working log — not for public
-distribution; see below).
-
-## Publishing / confidentiality
-
-This firmware is intended to be publishable/open-source. Two categories are
-**kept out of any public repo** (both are `.gitignore`d):
-
-- `private/` — specimen fault-analysis results and project motivation.
-- `PLAN.md` — internal working log; interweaves dead-part findings with design
-  notes. Extract the reusable design rationale into this README before ever
-  tracking it publicly.
-
-Publishable: firmware source, the programmer's own pin map / board
-reverse-engineering, the forensics *methodology*, and these docs once scrubbed.
-Do not add specimen fuse values or failure-analysis conclusions here.
+**STK500v2 is the target protocol** — avrdude speaks it natively and it
+carries everything this hardware can do, so STK600 parameter emulation is a
+non-goal. Working today: part-agnostic HVPP with x61 auto-remap, signature /
+fuse / lock / flash / EEPROM **reads** and **fuse writes** over HVPP, full
+ISP (including flash writes) through the same socket, the `@PINDBG!`
+console, native USB-CDC, and the button-free reflash loop. Not done yet:
+paged flash/EEPROM **writes over HVPP**, and HVSP (see the milestone list).
 
 ## Layout
 
@@ -221,8 +157,9 @@ pins, but because **RESET (the 12 V HV pin) is hardwired to the 28/40-pin RESET
 position** and that routing is fixed in copper, not configurable in firmware. On
 a 20-pin part that physical position is a *different* pin, so seating an x61 in
 the ZIF would put 12 V on the wrong pin. There is no way around this: **20-pin
-parts must be wired to the HVPP header on a separate socket** (the specimen here
-is a TSSOP on an adapter). This is a hard limitation, not a to-do.
+parts must be wired to the HVPP header on a separate socket** (a plain DIP
+socket, or an adapter for SMD packages). This is a hard limitation, not a
+to-do.
 
 > **Wire the x61 the STANDARD way — do NOT follow ScratchMonkey's x61 wiring
 > table.** This firmware detects the x61 control stack and remaps it on the fly,
@@ -263,17 +200,18 @@ alias, the known stock bug) — no rewiring needed across the flash.
 - [x] USB CDC-ACM transport + `@PINDBG!` console — live on hardware
 - [x] First flash 2026-07-02 (stock gone); soft-reflash loop proven
 - [x] Milestone 1: bring-up + ALL pin/polarity mysteries solved remotely
-      (clamp-diode forensics; see PLAN.md status 2026-07-02 night)
+      (clamp-diode forensics, 2026-07-02)
 - [x] Milestone 2 (2026-07-02, EXCEEDED): pristine t461a straight-wired,
       sig 1E 92 08 + lfuse 0x62 / hfuse 0xDF / efuse 0xFF / lock 0xFF,
       no -F, via **both** `-c stk500pp` (HVPP) and `-c stk500v2` (ISP);
       full flash + EEPROM read validated (factory blank)
 - [x] Milestone 3 (2026-07-02): read-only HVPP forensic snapshot of a
       fault specimen validated end to end (signature + all fuses + lock),
-      cross-checked on a second host.  Specimen-specific results are
-      confidential — see the private notes (not in this repo).
+      cross-checked on a second host
+- [x] ISP flash writes + HVPP fuse writes bench-validated (2026-07-03,
+      via the selftest flash/run/restore flow)
 - [ ] Milestone 4: regression on a standard 28/40-pin part
-- [ ] Paged flash/EEPROM writes, HVSP, USB CDC, ISP (see PLAN.md stretch)
+- [ ] Paged flash/EEPROM writes over HVPP; HVSP
 
 ## Planned safety interlocks & auto-wiring (TODO)
 
