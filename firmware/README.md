@@ -14,8 +14,8 @@ Features:
   control stack (`CMD_SET_CONTROL_STACK`), not a fixed table, so anything
   avrdude has a `pp_controlstack` for is in scope. Bench-validated on
   ATtiny461A; a standard 28/40-pin part is the next validation target.
-- **tinyX61 crossed-stack auto-remap** — wire an ATtiny261/461/861
-  **label-to-label** like any ordinary 20-pin part instead of the special
+- **tinyX61 crossed-stack auto-remap** — wire an ATtiny261/461/861 (and A
+  variants) **label-to-label** like any ordinary 20-pin part instead of the special
   crossed layout the official docs require. The native crossed wiring (the
   Dragon layout, and expansion cards built for it) stays available as a
   selectable raw mode; the firmware plays the stack to match either wiring.
@@ -53,15 +53,21 @@ Features:
 > this (see the planned signature gate below). Confirm the part and its
 > orientation match the socket/wiring, every time, before applying power.
 
-### Scope / status
+## Status and limitations
 
-**STK500v2 is the target protocol** — avrdude speaks it natively and it
-carries everything this hardware can do, so STK600 parameter emulation is a
-non-goal. Working today: part-agnostic HVPP with x61 auto-remap, signature /
-fuse / lock / flash / EEPROM **reads** and **fuse writes** over HVPP, full
-ISP (including flash writes) through the same socket, the `@PINDBG!`
-console, native USB-CDC, and the button-free reflash loop. Not done yet:
-paged flash/EEPROM **writes over HVPP**, and HVSP (see the milestone list).
+- **Target protocol: STK500v2** (avrdude speaks it natively). STK600
+  parameter emulation is a non-goal — STK500v2 carries everything this
+  hardware can do.
+- **Working today:** part-agnostic HVPP (reads of signature / fuses / lock /
+  flash / EEPROM, plus fuse writes), x61 auto-remap, full ISP including
+  flash writes, the `@PINDBG!` console, native USB-CDC, button-free reflash.
+- **Not done yet:** paged flash/EEPROM writes over HVPP.
+- **HVSP and JTAG: intentionally unsupported for now.** No parts are on hand
+  to validate them against, and unvalidated programming modes are worse than
+  absent ones. The board hardware supports both, so they are candidates once
+  test parts are available.
+- **Host software:** avrdude is the tested host. Microchip Studio 7 does not
+  yet recognize the firmware (sign-on identity matter — see Runtime notes).
 
 ## Layout
 
@@ -97,7 +103,7 @@ Flashing: hold the P3.2 button while plugging USB → ROM bootloader
 - Primary transport: **native USB CDC-ACM** (STC demo #61 stack ported to
   SDCC) — enumerates 34bf:ff02 "AVR HVPP P…", binds `cdc_acm` on Linux as
   `/dev/ttyACMn`, no driver on Win10+.
-  `avrdude -c stk500pp -P /dev/ttyACM0 -p t461a ...`
+  `avrdude -c stk500pp -P /dev/ttyACM0 -p <part> ...`
 - Fallback transport: UART2 header (P1.0 RxD / P1.1 TxD), 115200 8N1 —
   both are live simultaneously; responses go to whichever port sent the
   request.
@@ -143,13 +149,13 @@ Flashing: hold the P3.2 button while plugging USB → ROM bootloader
   LED (not on an MCU pin; somewhere in the switched-VCC network).
 - **ISP works through the HVPP socket** with no rewiring: WR/XA0/XA1
   headers are MOSI/MISO/SCK on x61 parts, RESET held at GND is the ISP
-  reset, VCC is switched.  `avrdude -c stk500v2 -P /dev/ttyACM0 -p t461a`.
+  reset, VCC is switched.  `avrdude -c stk500v2 -P /dev/ttyACM0 -p <part>`.
   Note: a DWEN-fused part has ISP disabled → use HVPP for it.
 - The socket rail wobbles at light load (dips at 10-100 ms after switch-on,
   varies per run); ISP entry sweeps power-on phase + burst-retries with
   SCK sync pulses to ride it out.
 
-## ATtiny461A straight wiring (PDIP20) — milestone 2/3 reference
+## tinyX61 straight wiring (PDIP20)
 
 The ZIF cards these boards ship with are **standard wide-DIP sockets (28/40-pin
 class)**, and a 20-pin part **cannot** use them — not just because of the signal
@@ -177,7 +183,7 @@ open** — on tinyX61 those functions normally ride the XA1 and BS1 lines; the
 firmware's auto-remap is what lets you keep this ordinary wiring instead of the
 crossed x61 layout.
 
-| Header | t461a pin | | Header | t461a pin |
+| Header | x61 pin  | | Header | x61 pin  |
 |--------|-----------|-|--------|-----------|
 | WR     | 1 (PB0)  | | DATA0  | 20 (PA0) |
 | XA0    | 2 (PB1)  | | DATA1  | 19 (PA1) |

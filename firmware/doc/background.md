@@ -1,9 +1,8 @@
 # Background — why this firmware exists
 
-None of this is needed to *use* the firmware — the [README](../README.md)
-has the wiring and the commands. This is the story and the reasoning, for
-anyone who wants to know why the stock unit fails and how that was pinned
-down.
+The [README](../README.md) covers wiring, building, and flashing. This page
+is the longer story: what is wrong with the stock firmware, why it took so
+long to pin down, and what this board actually is.
 
 ## The wall, brick by brick
 
