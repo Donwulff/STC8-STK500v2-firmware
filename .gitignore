@@ -1,0 +1,53 @@
+# --- Private / confidential (NEVER publish) ---
+# Specimen failure-analysis results, motivation, and any private notes.
+private/
+# Internal working log: day-by-day forensics interwoven with dead-chip
+# results. Not for public distribution as-is. The publishable design
+# rationale lives in firmware/README.md; extract more there before ever
+# tracking this file publicly.
+PLAN.md
+
+# --- Generated build output ---
+firmware/build/
+selftest/build/
+# Microchip Class B library: reference-only, non-OSI license — never vendor
+# (fetched by selftest/host/fetch_classb_ref.sh)
+selftest/ref/
+*.ihx
+*.bin
+*.rel
+*.lst
+*.sym
+*.map
+*.mem
+*.lk
+*.o
+*.rst
+*.cdb
+*.asm
+
+__pycache__/
+*.pyc
+
+# --- Host test binaries ---
+firmware/host/**/test_remap
+firmware/build/test_remap
+
+# --- Reference material (large third-party trees; not ours to ship) ---
+# Kept locally for reference; exclude from our repo.
+STC8H8K64U-DEMO-CODE-V9.6/
+ScratchMonkey/
+avrdude/
+doc2591.pdf
+doc8133.pdf
+
+# --- Local tooling / session exports (not for the repo) ---
+session-*.md
+.opencode/
+opencode.json
+.claude/
+
+# --- Editor / OS cruft ---
+*.swp
+*~
+.DS_Store
