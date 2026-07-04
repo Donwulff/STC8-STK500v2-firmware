@@ -37,12 +37,14 @@
 #include <stdint.h>
 #include "config.h"
 
-#define N_FRAMES 9
-
 uint8_t  cpu_regs_test(void);
 uint8_t  flash_crc_test(void);
 uint8_t  eeprom_test(void);
 uint16_t adc_vcc_mv(void);
+#if CFG_REPORT_USI
+void     usi_report_init(const uint8_t *f);
+void     usi_report_poll(void);
+#endif
 
 struct persist {
     uint8_t magic_a;            /* 0xC3 */
@@ -63,21 +65,33 @@ frames_sum(const uint8_t *f)
     return s;
 }
 
-/* delay in 8 ms units while keeping the beacon alive */
+/* delay in 8 ms units; keeps the beacon alive and the USI slave served */
 static void
 beacon_delay(uint8_t n8)
 {
     while (n8--) {
-        _delay_ms(8);
+        uint8_t k;
+        for (k = 0; k < 80; k++) {
+            _delay_us(100);
+#if CFG_REPORT_USI
+            usi_report_poll();
+#endif
+        }
+#if CFG_BEACON
         PINB = _BV(PB4);        /* hardware toggle */
+#endif
     }
 }
 
 static void
 report_forever(const uint8_t *f)
 {
-    uint8_t i;
+#if CFG_REPORT_USI
+    usi_report_init(f);
+#endif
     for (;;) {
+#if CFG_REPORT_HVPP
+        uint8_t i;
         for (i = 0; i < N_FRAMES; i++) {
             PORTA = f[i];
             PORTB |= _BV(PB0);
@@ -85,6 +99,9 @@ report_forever(const uint8_t *f)
             PORTB &= (uint8_t)~_BV(PB0);
             beacon_delay(38);   /* ~304 ms low */
         }
+#else
+        beacon_delay(38);
+#endif
     }
 }
 
@@ -95,9 +112,15 @@ main(void)
     MCUSR = 0;
     wdt_disable();              /* WDE is forced on after a WDT reset */
 
-    DDRA  = 0xFF;
+    DDRB = 0;
+#if CFG_REPORT_HVPP
+    DDRA  = 0xFF;               /* result bus + strobe: bench wiring only */
     PORTA = 0x00;
-    DDRB  = _BV(PB0) | _BV(PB4);
+    DDRB |= _BV(PB0);
+#endif
+#if CFG_BEACON
+    DDRB |= _BV(PB4);
+#endif
 #if CFG_DRIVE_RESET_HIGH
     /* deliberate reset-net drive fight — see config.h warning */
     PORTB |= _BV(PB7);

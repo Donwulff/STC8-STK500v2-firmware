@@ -18,7 +18,8 @@ FEATURES    ?=
 CC      = avr-gcc
 OBJCOPY = avr-objcopy
 
-SRC  = src/main.c src/flash_crc.c src/eeprom_test.c src/adc_check.c
+SRC  = src/main.c src/flash_crc.c src/eeprom_test.c src/adc_check.c \
+       src/usi_spi.c
 ASRC = src/march.S src/cpu_regs.S
 
 CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Os -Wall -Wextra -std=gnu11 -Isrc \

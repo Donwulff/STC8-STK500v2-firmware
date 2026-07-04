@@ -25,7 +25,8 @@ up.
 An IEC 60730 Class B-style diagnostic suite (CPU registers, full-SRAM
 March C-, flash CRC, EEPROM, ADC/VCC, watchdog, clock beacon) that runs
 **on the AVR itself** and reports back **through the HVPP socket wiring** —
-no extra wires, no UART, no test jig. One command answers "is this chip
+no extra wires, no UART, no test jig — or, for a chip staying on its board,
+as an SPI slave on the ISP pins. One command answers "is this chip
 actually good?" — incoming inspection of loose parts, qualifying a suspect
 chip, or proving code execution before a part goes somewhere hard to
 rework. Covers classic AVR parts that Microchip's own Class B library

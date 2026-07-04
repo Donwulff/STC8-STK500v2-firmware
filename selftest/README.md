@@ -134,6 +134,42 @@ A5 1A 2A 3A 4A 5A 6A 6A 01
 
 — six passes, VCC ≈ 3.4 V, clean power-on boot.
 
+## In-circuit readout over SPI (ISP pins)
+
+For a chip that stays on its board, the suite can serve the same results as
+an **SPI mode-0 slave** instead of driving the HVPP report bus. On the x61
+the USI's three-wire pins are exactly the ISP pins (DI=PB0/MOSI, DO=PB1/MISO,
+USCK=PB2/SCK), so any SPI master already sharing the ISP bus — a host MCU on
+the same PCB, or the programmer itself — can clock the results out with no
+extra wiring. Not yet bench-validated; the HVPP report path is.
+
+```sh
+make FEATURES='-DCFG_REPORT_USI=1 -DCFG_USI_CS_PORT=PORTA \
+               -DCFG_USI_CS_PIN=PINA -DCFG_USI_CS_BIT=3'   # CS pin = yours
+```
+
+The slave streams **10 bytes, repeating**: the nine frames above, then a
+check byte chosen so the 8-bit sum of all ten is zero. MOSI is ignored, so
+it doesn't matter what the master transmits. Chip select (active low,
+internal pullup, any spare pin — set the three `CFG_USI_CS_*` defines to
+match your board) makes the read deterministic: DO is released while
+deselected and the stream restarts at `0xA5` on each assertion, so *assert
+CS, clock 10 bytes, verify the sum* is the whole transaction. Without the
+CS defines the slave drives DO continuously and free-runs — fine on the
+bench, never on a shared bus.
+
+Practical notes for in-circuit use:
+
+- The USI build drives **nothing but DO while selected** (PA0–7 and the
+  strobe stay inputs; the PB4 beacon is off by default in this mode), so it
+  won't fight other nets on the board.
+- Byte reloads are polled: keep SCK at or below ~50 kHz at the default
+  1 MHz core clock, with a small gap between bytes. A torn byte fails the
+  check sum — just read the frame again.
+- The suite **replaces application flash**, and the EEPROM test **erases
+  the EEPROM** — build with `-DCFG_TEST_EEPROM=0` if the board's EEPROM
+  contents matter.
+
 ## How to run
 
 ```sh
