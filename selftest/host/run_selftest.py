@@ -272,7 +272,7 @@ def main():
                          "(lock bits untouched)")
     ap.add_argument("--beacon", action="store_true")
     ap.add_argument("--off", action="store_true",
-                    help="power the socket down and leave pindbg afterwards")
+                    help="power the socket down (safe idle) and exit")
     args = ap.parse_args()
 
     sh(f"fuser -k {args.port} 2>/dev/null; sleep 1")
@@ -283,6 +283,15 @@ def main():
     fd = open_port(args.port)
     send(fd, "q", settle=0.5)
     os.close(fd)
+
+    if args.off:
+        fd = open_port(args.port)
+        send(fd, "@PINDBG!", settle=0.5)
+        send(fd, "v")
+        send(fd, "+")                              # VCC_EN high = socket off
+        os.close(fd)
+        print("socket powered down (pindbg left active)")
+        return
 
     if args.restore_reset:
         # HVPP fuse write reaches a RSTDISBL'd part (that's the point of
@@ -411,12 +420,8 @@ def main():
         if args.beacon:
             beacon_hz(fd)
 
-    if args.off:
-        send(fd, "v")
-        send(fd, "+")                              # VCC off
-    else:
-        print("(socket left powered, pindbg still active — "
-              "'q' via terminal to exit)")
+    print("(socket left powered, pindbg still active — "
+          "'q' via terminal to exit, or run again with --off)")
     os.close(fd)
     sys.exit(0 if ok else 1)
 

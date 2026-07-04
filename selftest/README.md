@@ -196,6 +196,14 @@ python3 host/run_selftest.py --restore-reset
 avrdude (`-c stk500v2 -p t461a` — the board's own ISP mode), enters pindbg,
 powers the socket, collects one frame round, prints PASS/FAIL per test.
 `--beacon` additionally captures the clock beacon and estimates F_CPU.
+`--off` powers the socket back down to safe idle and exits.
+
+`python3 host/fingerprint.py` takes a passive pin fingerprint of whatever
+is in the socket (port snapshot, VCC, per-pin ADC float levels, decay
+probe) in a fixed order, so runs are diffable against a known-good part.
+Instant decay (0–1 ticks) on a wired pin is the robust leak signature;
+absolute decay times and float levels vary with residual phantom-rail
+charge and the specimen's fuse state, so compare like with like.
 
 Expected on a healthy chip (bench-verified 2026-07-03): everything
 PASS; VCC ≈ 3300–3600 mV as measured *by the
