@@ -279,8 +279,22 @@ def main():
 
     # ALWAYS bounce out of a possibly-active pindbg first: it eats every
     # byte (by design), which hangs avrdude silently.  Harmless when the
-    # firmware is already in STK mode.
+    # firmware is already in STK mode.  Then park the ISP-header RST latch
+    # (P1.5) LOW before any avrdude ISP op: the firmware's ISP mode relies
+    # on RESET being externally held low (historically by the HVPP node),
+    # so with the RESET wire on the ISP header the chip would otherwise
+    # keep running and ISP init times out.  The latch survives 'q' back to
+    # STK mode; harmless when the wire is elsewhere or the part is
+    # RSTDISBL'd, and power_up() releases it before collecting results.
     fd = open_port(args.port)
+    send(fd, "q", settle=0.5)
+    read_avail(fd)
+    send(fd, "@PINDBG!", settle=0.5)
+    read_avail(fd)
+    send(fd, "l", settle=0.2)
+    read_avail(fd)
+    send(fd, "-", settle=0.2)
+    read_avail(fd)
     send(fd, "q", settle=0.5)
     os.close(fd)
 
