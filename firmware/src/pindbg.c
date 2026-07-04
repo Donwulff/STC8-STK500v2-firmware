@@ -310,6 +310,7 @@ help(void)
           "S ISP pin scan (chip in socket; finds true SCK/MISO)\r\n"
           "C clamp-decay probe (charge, hi-Z, per-pin fall time ~0.1ms ticks)\r\n"
           "V VCC_EN hunt (find which pin actually powers the socket)\r\n"
+          "R read selftest USI-SPI stream (SCK=XA1, MISO=XA0; chip running)\r\n"
           "M VCC mV+guard  A adc-probe sel pin  U probe hdr P1.0\r\n"
           "W 256x1ms capture (sel pin or VCC)  G sag-guard toggle\r\n");
 }
@@ -613,6 +614,67 @@ vcc_hunt(void)
     puts2("HUNT DONE\r\n");
 }
 
+/*
+ * Read the selftest suite's USI-SPI result stream (selftest built with
+ * CFG_REPORT_USI; chip powered with 'v+' and running).  Straight x61
+ * wiring puts the chip's USI on our headers: USCK=PB2 -> XA1/P0.2 (we
+ * master SCK), DO=PB1 -> XA0/P3.5 (MISO).  DI/PB0 ignores its input.
+ *
+ * Mode 0 at ~12 kHz with a ~600 us inter-byte gap (the slave reloads by
+ * polling).  SCK is first held low ~20 ms so the slave's gap-resync
+ * restarts its stream at the sync byte; 21 bytes still guarantee one
+ * complete 10-byte frame from any phase.  Frame checks out when the
+ * 8-bit sum of all 10 bytes (sync..check) is zero.
+ */
+static void
+spi_stream_read(void)
+{
+    static __xdata uint8_t buf[21];
+    static __xdata uint8_t i, j, s;
+    uint8_t v, k;                       /* bit-bang loop stays fast */
+
+    P0 &= (uint8_t)~0x04;               /* SCK low: settle + slave resync */
+    hal_delay_ms(20);
+
+    for (i = 0; i < 21; ++i) {
+        v = 0;
+        for (k = 0; k < 8; ++k) {
+            v = (uint8_t)(v << 1) | ((P3 & 0x20) ? 1 : 0);
+            P0 |= 0x04;
+            hal_delay_us(40);
+            P0 &= (uint8_t)~0x04;
+            hal_delay_us(40);
+        }
+        buf[i] = v;
+        hal_delay_us(600);              /* slave reload gap */
+    }
+    P0 |= 0x04;                         /* back to PINDBG idle pullup */
+
+    puts2("raw:");
+    for (i = 0; i < 21; ++i) {
+        hal_tx_byte(' ');
+        put_hex(buf[i]);
+    }
+    puts2("\r\n");
+    for (i = 0; i < 10; ++i) {
+        if (buf[i] != 0xA5)
+            continue;
+        s = 0;
+        for (j = 0; j < 10; ++j)
+            s = (uint8_t)(s + buf[i + j]);
+        if (s)
+            continue;
+        puts2("frame:");
+        for (j = 0; j < 10; ++j) {
+            hal_tx_byte(' ');
+            put_hex(buf[i + j]);
+        }
+        puts2(" SUM OK\r\n");
+        return;
+    }
+    puts2("no valid frame (chip running a CFG_REPORT_USI build?)\r\n");
+}
+
 uint8_t
 pindbg_rx(uint8_t b)
 {
@@ -649,6 +711,7 @@ pindbg_rx(uint8_t b)
     case 'S': puts2("\r\n"); isp_scan(); return 1;
     case 'C': puts2("\r\n"); decay_probe(); return 1;
     case 'V': puts2("\r\n"); vcc_hunt(); return 1;
+    case 'R': puts2("\r\n"); spi_stream_read(); return 1;
     case 'M':
         puts2(" VCC=");
         put_u16(adc_vcc_mv());

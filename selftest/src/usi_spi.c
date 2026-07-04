@@ -19,6 +19,8 @@
 static const uint8_t *tx;       /* report frames (NULL until init) */
 static uint8_t check;           /* 0x100 - sum(frames): stream sums to 0 */
 static uint8_t idx;             /* stream index currently loaded in USIDR */
+static uint8_t prev_cnt;        /* USI bit-counter stall detection */
+static uint8_t stale;
 
 static uint8_t
 byte_at(uint8_t i)
@@ -67,6 +69,28 @@ usi_report_poll(void)
         idx = (uint8_t)((idx + 1) % USI_STREAM_LEN);
         USIDR = byte_at(idx);
         USISR = _BV(USIOIF);
+        stale = 0;
+        return;
+    }
+
+    /* Gap resync: the USI counts both SCK edges and a stray edge would
+     * misalign the stream for good, so a bit counter stuck mid-byte for
+     * ~10 ms (>=100 polls) resets everything to the sync byte.  A master
+     * without CS gets a deterministic read the same way: idle the clock
+     * ~20 ms, then clock a full frame. */
+    {
+        uint8_t cnt = USISR & 0x0F;
+        if (cnt && cnt == prev_cnt) {
+            if (++stale >= 100) {
+                idx = 0;
+                USIDR = byte_at(0);
+                USISR = _BV(USIOIF);
+                stale = 0;
+            }
+        } else {
+            stale = 0;
+        }
+        prev_cnt = cnt;
     }
 }
 

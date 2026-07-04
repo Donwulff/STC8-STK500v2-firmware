@@ -156,7 +156,15 @@ match your board) makes the read deterministic: DO is released while
 deselected and the stream restarts at `0xA5` on each assertion, so *assert
 CS, clock 10 bytes, verify the sum* is the whole transaction. Without the
 CS defines the slave drives DO continuously and free-runs — fine on the
-bench, never on a shared bus.
+bench, never on a shared bus. Either way the slave resyncs on a stalled
+clock: if SCK sits idle mid-byte for over ~10 ms the stream resets to the
+sync byte, so a CS-less master can still get a framed read (idle the clock
+20 ms, then clock 10 bytes), and a stray clock edge can't misalign the
+stream for good.
+
+The programmer can read the stream itself: pindbg key `R` masters SCK on
+the XA1 header and samples MISO on XA0 (where straight wiring puts the
+chip's USI), printing the raw bytes plus the checksum-verified frame.
 
 Practical notes for in-circuit use:
 

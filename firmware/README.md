@@ -137,7 +137,8 @@ Flashing: hold the P3.2 button while plugging USB → ROM bootloader
   Programming-Enable echo), `C` = clamp-decay probe (charge pins, hi-Z,
   watch discharge — distinguishes wired/unwired pins, chip presence, and
   whether the rail is really powered; inherits VCC/RESET state), `V` =
-  VCC_EN hunt.
+  VCC_EN hunt, `R` = read the selftest suite's USI-SPI result stream
+  (see `../selftest/`).
 - All board.h polarities/pins are PROVEN, and every P1 mystery is solved
   (the original pin table was from the wrong LQFP32 variant page of the
   STC8H datasheet; true row: pins 1-8 = P1.0, P1.1, P1.4, P1.5, P1.6,
