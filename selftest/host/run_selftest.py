@@ -205,6 +205,30 @@ def decode(round_):
     return ok
 
 
+def strobe_fcpu(fd, seconds=10):
+    """F_CPU from the report strobe: each half-period is 38 x 8 ms of
+    _delay_ms at the assumed 1 MHz, so wall-clock half-period vs 304 ms
+    nominal gives the true clock ratio.  Far more trustworthy than the
+    beacon 'W' capture, whose STC-side sample tick is uncalibrated."""
+    prev, edges = None, []
+    t0 = time.time()
+    while time.time() - t0 < seconds:
+        got = poll_ports(fd)
+        if got:
+            s = bool(got[1] & 0x08)
+            if prev is not None and s != prev:
+                edges.append(time.time())
+            prev = s
+        time.sleep(0.02)
+    if len(edges) < 6:
+        print("strobe clock: too few transitions, skipping")
+        return
+    avg = (edges[-1] - edges[0]) / (len(edges) - 1)
+    print(f"strobe clock: {len(edges) - 1} half-periods, avg "
+          f"{avg * 1000:.0f} ms (304 nominal) -> F_CPU ~ "
+          f"{0.304 / avg:.2f} MHz-equivalent")
+
+
 def beacon_hz(fd):
     """'h' selects the XTAL1 wire (STC P0.0 = ADC ch8), 'W' captures
     256 x ~1 ms.  Beacon toggles every 8 ms -> expect ~62.5 Hz."""
@@ -222,9 +246,10 @@ def beacon_hz(fd):
     mid = (max(vals) + min(vals)) // 2
     rises = sum(1 for a, b in zip(vals, vals[1:]) if a < mid <= b)
     hz = rises / (len(vals) * 0.001)
-    print(f"beacon: {rises} rising edges / {len(vals)} ms -> ~{hz:.1f} Hz "
-          f"(62.5 Hz nominal) -> F_CPU ~ {hz * 16384 / 1e6:.2f} MHz "
-          f"[STC tick ~1 ms uncalibrated, +/-10%]")
+    print(f"beacon: {rises} rising edges / {len(vals)} samples -> ~{hz:.1f} Hz "
+          f"if the tick were 1 ms — RELATIVE measure only: the STC sample "
+          f"tick is uncalibrated (0.7-1.3 ms observed); use the strobe "
+          f"clock line for F_CPU")
 
 
 def main():
@@ -382,6 +407,7 @@ def main():
               "('p' should show P1 bit3 toggling every ~300 ms)")
     else:
         ok = decode(round_)
+        strobe_fcpu(fd)
         if args.beacon:
             beacon_hz(fd)
 
